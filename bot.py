@@ -1,4 +1,3 @@
-# bot.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -15,8 +14,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler
 )
-from telegram.request import HTTPXRequest
-import httpx
+import time
 
 # ===== ТВОИ ДАННЫЕ =====
 BOT_TOKEN = "8792343001:AAFsJpRWHvfNw8YCdbAuETosfGYqPfzD_zQ"
@@ -164,6 +162,7 @@ logging.basicConfig(
 # ========== ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ ==========
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Старт для пользователя"""
     await update.message.reply_text(
         f"👋 Привет, {update.effective_user.first_name}!\n\n"
         "Я помогу купить короткий Telegram-юзернейм.\n\n"
@@ -172,6 +171,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Помощь"""
     await update.message.reply_text(
         "🔍 **Как купить:**\n"
         "1. /list — посмотреть доступные имена\n"
@@ -181,11 +181,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список доступных имён"""
     available = USERNAMES
+    
     if not available:
         await update.message.reply_text("😔 Сейчас нет доступных имён.")
         return
     
+    # Разбиваем на страницы по 20 имён
     page = context.user_data.get("page", 0)
     start_idx = page * 20
     end_idx = min(start_idx + 20, len(available))
@@ -199,6 +202,7 @@ async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"select_{u['full']}"
         )])
     
+    # Кнопки навигации
     nav_buttons = []
     if page > 0:
         nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data="prev_page"))
@@ -211,21 +215,27 @@ async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def page_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Навигация по страницам"""
     query = update.callback_query
     await query.answer()
+    
     page = context.user_data.get("page", 0)
+    
     if query.data == "next_page":
         context.user_data["page"] = page + 1
     elif query.data == "prev_page":
         context.user_data["page"] = max(0, page - 1)
+    
     await list_usernames(update, context)
 
 async def select_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пользователь выбрал имя"""
     query = update.callback_query
     await query.answer()
     
     full_username = query.data.replace("select_", "")
     context.user_data["selected_username"] = full_username
+    
     u = usernames_dict[full_username]
     
     await query.edit_message_text(
@@ -239,12 +249,14 @@ async def select_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_FOR_PRICE
 
 async def back_to_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вернуться к списку"""
     query = update.callback_query
     await query.answer()
     await list_usernames(update, context)
     return ConversationHandler.END
 
 async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получает цену от пользователя"""
     try:
         price = int(update.message.text.strip())
         if price < 100:
@@ -258,6 +270,7 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u = usernames_dict[username]
     
+    # Сохраняем предложение
     user_offers[user_id] = {
         "username": username,
         "offer_price": price,
@@ -265,6 +278,7 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "user_name": update.effective_user.full_name
     }
     
+    # Отправляем админу
     keyboard = [
         [
             InlineKeyboardButton("✅ Принять", callback_data=f"accept_{user_id}"),
@@ -294,11 +308,13 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== АДМИН-КОМАНДЫ ==========
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Панель администратора"""
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Доступ запрещён")
         return
     
     waiting_users = list(user_offers.keys())
+    
     text = "👨‍💻 **Панель администратора**\n\n"
     text += f"📊 Всего имён в базе: {len(USERNAMES)}\n"
     text += f"👥 Ожидают ответа: {len(waiting_users)}\n\n"
@@ -317,6 +333,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def waiting_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список ожидающих пользователей"""
     query = update.callback_query
     await query.answer()
     
@@ -335,42 +352,54 @@ async def waiting_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )])
     
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_back")])
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик админских callback'ов"""
     query = update.callback_query
     await query.answer()
+    
     data = query.data
     
     if data.startswith("accept_"):
         user_id = int(data.replace("accept_", ""))
         offer = user_offers.get(user_id)
+        
         if offer:
-            await context.bot.send_message(
-                user_id,
-                f"✅ **Администратор принял твоё предложение!**\n\n"
-                f"Юзернейм: {offer['display']}\n"
-                f"Цена: {offer['offer_price']}₽\n\n"
-                f"Скоро с тобой свяжутся для передачи."
-            )
-            await query.edit_message_text(f"✅ Предложение от {offer['user_name']} принято")
-            del user_offers[user_id]
+            try:
+                await context.bot.send_message(
+                    user_id,
+                    f"✅ **Администратор принял твоё предложение!**\n\n"
+                    f"Юзернейм: {offer['display']}\n"
+                    f"Цена: {offer['offer_price']}₽\n\n"
+                    f"Скоро с тобой свяжутся для передачи."
+                )
+                await query.edit_message_text(f"✅ Предложение от {offer['user_name']} принято")
+                del user_offers[user_id]
+            except Exception as e:
+                await query.edit_message_text(f"❌ Ошибка: {e}")
     
     elif data.startswith("reject_"):
         user_id = int(data.replace("reject_", ""))
         offer = user_offers.get(user_id)
+        
         if offer:
-            await context.bot.send_message(
-                user_id,
-                f"❌ **Администратор отклонил твоё предложение**\n\n"
-                f"Юзернейм: {offer['display']}"
-            )
-            await query.edit_message_text(f"❌ Предложение от {offer['user_name']} отклонено")
-            del user_offers[user_id]
+            try:
+                await context.bot.send_message(
+                    user_id,
+                    f"❌ **Администратор отклонил твоё предложение**\n\n"
+                    f"Юзернейм: {offer['display']}"
+                )
+                await query.edit_message_text(f"❌ Предложение от {offer['user_name']} отклонено")
+                del user_offers[user_id]
+            except Exception as e:
+                await query.edit_message_text(f"❌ Ошибка: {e}")
     
     elif data.startswith("chat_"):
         user_id = int(data.replace("chat_", ""))
         offer = user_offers.get(user_id)
+        
         if offer:
             context.user_data["chatting_with"] = user_id
             await query.edit_message_text(
@@ -381,75 +410,74 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     elif data == "waiting_list":
         await waiting_list(update, context)
+    
     elif data == "admin_back":
         await admin_panel(update, context)
 
 async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пересылает сообщения админа пользователю в чате"""
     if update.effective_user.id != ADMIN_ID:
         return
+    
     chat_with = context.user_data.get("chatting_with")
     if not chat_with:
         return
+    
     text = update.message.text
     await context.bot.send_message(chat_with, f"💬 **Сообщение от администратора:**\n\n{text}")
     await update.message.reply_text("✅ Отправлено")
 
 async def end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает чат с пользователем"""
     if update.effective_user.id != ADMIN_ID:
         return
+    
     context.user_data.pop("chatting_with", None)
     await update.message.reply_text("✅ Чат завершён")
 
 # ========== ЗАПУСК ==========
+
 def main():
+    """Основная функция запуска бота"""
     print("🚀 Запуск бота...")
     print(f"🔑 Токен: {BOT_TOKEN[:15]}... (скрыт)")
     
-    request = HTTPXRequest(
-        connection_pool_size=8,
-        connect_timeout=30.0,
-        read_timeout=30.0,
-        write_timeout=30.0,
-        pool_timeout=30.0
-    )
+    # Создаём приложение
+    application = Application.builder().token(BOT_TOKEN).build()
     
-    app = Application.builder().token(BOT_TOKEN).request(request).build()
-    
+    # Диалог с покупателем
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(select_username, pattern="^select_")],
-        states={WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_price)]},
+        states={
+            WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_price)]
+        },
         fallbacks=[CallbackQueryHandler(back_to_list, pattern="^back_to_list$")]
     )
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("list", list_usernames))
-    app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("endchat", end_chat))
-    app.add_handler(conv_handler)
-    app.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
-    app.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(accept_|reject_|chat_|waiting_list|admin_back|reply_).*"))
-    app.add_handler(CallbackQueryHandler(back_to_list, pattern="^back_to_list$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message))
+    # Основные команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("list", list_usernames))
+    application.add_handler(CommandHandler("admin", admin_panel))
+    application.add_handler(CommandHandler("endchat", end_chat))
+    application.add_handler(conv_handler)
+    
+    # Навигация по страницам
+    application.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
+    
+    # Callback handlers
+    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(accept_|reject_|chat_|waiting_list|admin_back|reply_).*"))
+    application.add_handler(CallbackQueryHandler(back_to_list, pattern="^back_to_list$"))
+    
+    # Пересылка сообщений админа
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message))
     
     print("✅ Бот готов к работе!")
     print(f"👤 Админ ID: {ADMIN_ID}")
     print("📋 Команды: /list - для покупателей, /admin - для вас")
     
-    try:
-        app.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,
-            close_loop=False,
-            poll_interval=1.0,
-            timeout=60
-        )
-    except Exception as e:
-        print(f"❌ Ошибка при запуске: {e}")
-        print("🔄 Повторная попытка через 10 секунд...")
-        import time
-        time.sleep(10)
-        main()
+    # Запускаем polling
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     try:
@@ -459,6 +487,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Критическая ошибка: {e}")
         print("🔄 Перезапуск через 10 секунд...")
-        import time
         time.sleep(10)
         main()
