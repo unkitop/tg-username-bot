@@ -334,8 +334,17 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
                 f"Цена: {offer['offer_price']}₽\n\n"
                 f"Скоро с тобой свяжутся для передачи."
             )
-            await query.edit_message_text(f"✅ Предложение от {offer['user_name']} принято")
-            del user_offers[user_id]
+                        
+
+
+            keybord = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Написать покупателю", callback_data=f"chat_{user_id}")]
+            ])
+
+            await query.edit_message_text(
+                f"Предложение от {offer['user_name']} приянто",
+                reply_markup=keybord
+            )
     
     elif data.startswith("reject_"):
         user_id = int(data.replace("reject_", ""))
@@ -358,16 +367,6 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
                 f"💬 Ты начал чат с {offer['user_name']}\n"
                 f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
                 f"Чтобы выйти из чата, напиши /endchat"
-            )
-
-
-            keybord = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Написать покупателю", callback_data=f"chat_{user_id}")]
-            ])
-
-            await query.edit_message_text(
-                f"Предложение от {offer['user_name']} приянто",
-                reply_markup=keybord
             )
     
     elif data == "waiting_list":
