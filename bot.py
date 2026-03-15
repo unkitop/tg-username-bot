@@ -15,7 +15,6 @@ from telegram.ext import (
     ConversationHandler
 )
 import time
-import sys
 
 # ===== ТВОИ ДАННЫЕ =====
 BOT_TOKEN = "8792343001:AAFsJpRWHvfNw8YCdbAuETosfGYqPfzD_zQ"
@@ -128,6 +127,24 @@ USERNAMES = [
     {"display": "@nuf##", "full": "@nufme", "price": 1400},
     {"display": "@tca##", "full": "@tcavo", "price": 1400},
     {"display": "@mej##", "full": "@mejyw", "price": 1400},
+    {"display": "@dqy##", "full": "@dqyfi", "price": 1400},
+    {"display": "@kku##", "full": "@kkudy", "price": 1400},
+    {"display": "@jyp##", "full": "@jypva", "price": 1400},
+    {"display": "@pka##", "full": "@pkafy", "price": 1400},
+    {"display": "@noc##", "full": "@nocji", "price": 1400},
+    {"display": "@zec##", "full": "@zecje", "price": 1400},
+    {"display": "@fap##", "full": "@fapwa", "price": 1400},
+    {"display": "@upx##", "full": "@upxaw", "price": 1400},
+    {"display": "@bwe##", "full": "@bwebu", "price": 1400},
+    {"display": "@iws##", "full": "@iwsub", "price": 1400},
+    {"display": "@cyz##", "full": "@cyzly", "price": 1400},
+    {"display": "@bny##", "full": "@bnyzo", "price": 1400},
+    {"display": "@cpo##", "full": "@cpoxy", "price": 1400},
+    {"display": "@ytx##", "full": "@ytxut", "price": 1400},
+    {"display": "@vzi##", "full": "@vzifo", "price": 1400},
+    {"display": "@kaq##", "full": "@kaqii", "price": 1400},
+    {"display": "@qaj##", "full": "@qajod", "price": 1400},
+    {"display": "@obn##", "full": "@obnir", "price": 1400},
 ]
 
 # Преобразуем в словарь для быстрого доступа
@@ -326,29 +343,36 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     if data.startswith("accept_"):
         user_id = int(data.replace("accept_", ""))
         offer = user_offers.get(user_id)
+        
         if offer:
+            # Отправляем пользователю полное имя
+            full_username = offer['username']
             await context.bot.send_message(
                 user_id,
-                f"✅ **Администратор принял твоё предложение!**\n\n"
-                f"Юзернейм: {offer['display']}\n"
-                f"Цена: {offer['offer_price']}₽\n\n"
-                f"Скоро с тобой свяжутся для передачи."
+                f"✅ **Поздравляю! Твой юзернейм готов!**\n\n"
+                f"📛 **Имя:** {full_username}\n"
+                f"💰 Цена: {offer['offer_price']}₽\n\n"
+                f"🔐 **Как занять:**\n"
+                f"1. Открой Telegram\n"
+                f"2. Настройки → Имя пользователя\n"
+                f"3. Введи {full_username} и нажми сохранить\n\n"
+                f"Имя твоё! Приятного использования 🚀"
             )
-                        
-
-
-            keybord = InlineKeyboardMarkup([
-                [InlineKeyboardButton("Написать покупателю", callback_data=f"chat_{user_id}")]
-            ])
-
+            
+            # Активируем чат для пользователя
+            context.bot_data[f"chat_{user_id}"] = True
+            context.user_data["chatting_with"] = user_id
+            
             await query.edit_message_text(
-                f"Предложение от {offer['user_name']} приянто",
-                reply_markup=keybord
+                f"✅ Имя {full_username} передано пользователю {offer['user_name']}\n"
+                f"💬 Теперь ты можешь с ним общаться"
             )
+            del user_offers[user_id]
     
     elif data.startswith("reject_"):
         user_id = int(data.replace("reject_", ""))
         offer = user_offers.get(user_id)
+        
         if offer:
             await context.bot.send_message(
                 user_id,
@@ -359,47 +383,81 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             del user_offers[user_id]
     
     elif data.startswith("chat_"):
-    user_id = int(data.replace("chat_", ""))
-    offer = user_offers.get(user_id)
-    
-    if offer:
-        # Активируем чат для пользователя
-        context.bot_data[f"chat_{user_id}"] = True
+        user_id = int(data.replace("chat_", ""))
+        offer = user_offers.get(user_id)
         
-        # Сообщаем пользователю, что админ начал чат
-        await context.bot.send_message(
-            user_id,
-            f"💬 Администратор начал с тобой чат!\n"
-            f"Теперь ты можешь писать сюда, и сообщения будут доставлены."
-        )
-        
-        context.user_data["chatting_with"] = user_id
-        await query.edit_message_text(
-            f"💬 Ты начал чат с {offer['user_name']}\n"
-            f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
-            f"Чтобы выйти из чата, напиши /endchat"
-        )
+        if offer:
+            # Активируем чат для пользователя
+            context.bot_data[f"chat_{user_id}"] = True
+            
+            await context.bot.send_message(
+                user_id,
+                f"💬 **Администратор начал с тобой чат!**\n"
+                f"Теперь ты можешь писать сюда, и сообщения будут доставлены."
+            )
+            
+            context.user_data["chatting_with"] = user_id
+            await query.edit_message_text(
+                f"💬 Ты начал чат с {offer['user_name']}\n"
+                f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
+                f"Чтобы выйти из чата, напиши /endchat"
+            )
     
     elif data == "waiting_list":
         await waiting_list(update, context)
     elif data == "admin_back":
         await admin_panel(update, context)
 
+# ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
+
 async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пересылает сообщения админа пользователю"""
     if update.effective_user.id != ADMIN_ID:
         return
+    
     chat_with = context.user_data.get("chatting_with")
     if not chat_with:
+        await update.message.reply_text("❌ Сначала начни чат с пользователем")
         return
+    
     text = update.message.text
-    await context.bot.send_message(chat_with, f"💬 **Сообщение от администратора:**\n\n{text}")
+    await context.bot.send_message(chat_with, f"💬 **Администратор:**\n\n{text}")
     await update.message.reply_text("✅ Отправлено")
 
+async def user_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пересылает сообщения пользователя админу"""
+    user_id = update.effective_user.id
+    if user_id == ADMIN_ID:
+        return
+    
+    # Проверяем, активен ли чат для этого пользователя
+    chat_active = context.bot_data.get(f"chat_{user_id}", False)
+    
+    if chat_active:
+        text = update.message.text
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"💬 **Сообщение от пользователя:**\n\n{text}"
+        )
+        await update.message.reply_text("✅ Отправлено администратору")
+    else:
+        await update.message.reply_text(
+            "👋 Чтобы начать, используй /list и выбери понравившееся имя."
+        )
+
 async def end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает чат с пользователем"""
     if update.effective_user.id != ADMIN_ID:
         return
-    context.user_data.pop("chatting_with", None)
-    await update.message.reply_text("✅ Чат завершён")
+    
+    chat_with = context.user_data.get("chatting_with")
+    if chat_with:
+        # Деактивируем чат для пользователя
+        context.bot_data[f"chat_{chat_with}"] = False
+        context.user_data.pop("chatting_with", None)
+        await update.message.reply_text("✅ Чат завершён")
+    else:
+        await update.message.reply_text("❌ Нет активного чата")
 
 # ========== ЗАПУСК ==========
 
@@ -407,9 +465,8 @@ def main():
     print("🚀 Запуск бота...")
     print(f"🔑 Токен: {BOT_TOKEN[:15]}... (скрыт)")
     
-    # Упрощённое создание приложения
-    application = Application.builder().token(BOT_TOKEN).build() \
-        
+    # Создаём приложение
+    application = Application.builder().token(BOT_TOKEN).build()
     
     # Диалог с покупателем
     conv_handler = ConversationHandler(
@@ -427,21 +484,6 @@ def main():
     application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("endchat", end_chat))
     application.add_handler(conv_handler)
-        # Обработчик для сообщений от обычных пользователей (не в диалоге)
-    async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        # Игнорируем админа
-        if user_id == ADMIN_ID:
-            return
-        
-        await update.message.reply_text(
-            "👋 Чтобы начать, используй /list и выбери понравившееся имя."
-        )
-    
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
-        handle_user_message
-    ))
     
     # Навигация по страницам
     application.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
@@ -450,8 +492,17 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(accept_|reject_|chat_|waiting_list|admin_back|reply_).*"))
     application.add_handler(CallbackQueryHandler(back_to_list, pattern="^back_to_list$"))
     
-    # Пересылка сообщений админа
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_message))
+    # Обработчики сообщений
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
+        chat_message,
+        filters.User(user_id=ADMIN_ID)
+    ))
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
+        user_to_admin
+    ))
     
     print("✅ Бот готов к работе!")
     print(f"👤 Админ ID: {ADMIN_ID}")
