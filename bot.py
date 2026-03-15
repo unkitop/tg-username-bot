@@ -388,7 +388,14 @@ def main():
     print(f"🔑 Токен: {BOT_TOKEN[:15]}... (скрыт)")
     
     # Упрощённое создание приложения
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder() \
+        .token(BOT_TOKEN) \
+        .connect_timeout(30) \ 
+        .read_timeout(30) \
+        .write_timeout(30) \
+        .pool_timeout(30) \
+        .build() \
+        
     
     # Диалог с покупателем
     conv_handler = ConversationHandler(
@@ -406,6 +413,21 @@ def main():
     application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("endchat", end_chat))
     application.add_handler(conv_handler)
+        # Обработчик для сообщений от обычных пользователей (не в диалоге)
+    async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        # Игнорируем админа
+        if user_id == ADMIN_ID:
+            return
+        
+        await update.message.reply_text(
+            "👋 Чтобы начать, используй /list и выбери понравившееся имя."
+        )
+    
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
+        handle_user_message
+    ))
     
     # Навигация по страницам
     application.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
