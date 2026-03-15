@@ -398,13 +398,7 @@ def main():
     print(f"🔑 Токен: {BOT_TOKEN[:15]}... (скрыт)")
     
     # Упрощённое создание приложения
-    application = Application.builder() \
-        .token(BOT_TOKEN) \
-        .connect_timeout(30) \ 
-        .read_timeout(30) \
-        .write_timeout(30) \
-        .pool_timeout(30) \
-        .build() \
+    application = Application.builder().token(BOT_TOKEN).build() \
         
     
     # Диалог с покупателем
