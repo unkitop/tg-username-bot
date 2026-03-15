@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import asyncio
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -100,51 +99,6 @@ USERNAMES = [
     {"display": "@lki##", "full": "@lkivo", "price": 1500},
     {"display": "@lyq##", "full": "@lyqyz", "price": 1500},
     {"display": "@omh##", "full": "@omhej", "price": 1500},
-    {"display": "@qbe##", "full": "@qbepu", "price": 1400},
-    {"display": "@bno##", "full": "@bnoce", "price": 1400},
-    {"display": "@ivg##", "full": "@ivgyj", "price": 1400},
-    {"display": "@kbi##", "full": "@kbivu", "price": 1400},
-    {"display": "@lru##", "full": "@lruwy", "price": 1400},
-    {"display": "@onf##", "full": "@onfyk", "price": 1400},
-    {"display": "@laf##", "full": "@lafxu", "price": 1400},
-    {"display": "@pyh##", "full": "@pyhem", "price": 1400},
-    {"display": "@zyq##", "full": "@zyqai", "price": 1400},
-    {"display": "@mgi##", "full": "@mgiqu", "price": 1400},
-    {"display": "@lyp##", "full": "@lypve", "price": 1400},
-    {"display": "@bzy##", "full": "@bzyhu", "price": 1400},
-    {"display": "@uql##", "full": "@uqlot", "price": 1400},
-    {"display": "@agj##", "full": "@agjap", "price": 1400},
-    {"display": "@ywr##", "full": "@ywrup", "price": 1400},
-    {"display": "@qyf##", "full": "@qyfhi", "price": 1400},
-    {"display": "@gyn##", "full": "@gynre", "price": 1400},
-    {"display": "@czo##", "full": "@czoky", "price": 1400},
-    {"display": "@ojw##", "full": "@ojwyj", "price": 1400},
-    {"display": "@boz##", "full": "@bozyj", "price": 1400},
-    {"display": "@gav##", "full": "@gavqo", "price": 1400},
-    {"display": "@sfu##", "full": "@sfuxa", "price": 1400},
-    {"display": "@gxo##", "full": "@gxobe", "price": 1400},
-    {"display": "@vfe##", "full": "@vfeni", "price": 1400},
-    {"display": "@nuf##", "full": "@nufme", "price": 1400},
-    {"display": "@tca##", "full": "@tcavo", "price": 1400},
-    {"display": "@mej##", "full": "@mejyw", "price": 1400},
-    {"display": "@dqy##", "full": "@dqyfi", "price": 1400},
-    {"display": "@kku##", "full": "@kkudy", "price": 1400},
-    {"display": "@jyp##", "full": "@jypva", "price": 1400},
-    {"display": "@pka##", "full": "@pkafy", "price": 1400},
-    {"display": "@noc##", "full": "@nocji", "price": 1400},
-    {"display": "@zec##", "full": "@zecje", "price": 1400},
-    {"display": "@fap##", "full": "@fapwa", "price": 1400},
-    {"display": "@upx##", "full": "@upxaw", "price": 1400},
-    {"display": "@bwe##", "full": "@bwebu", "price": 1400},
-    {"display": "@iws##", "full": "@iwsub", "price": 1400},
-    {"display": "@cyz##", "full": "@cyzly", "price": 1400},
-    {"display": "@bny##", "full": "@bnyzo", "price": 1400},
-    {"display": "@cpo##", "full": "@cpoxy", "price": 1400},
-    {"display": "@ytx##", "full": "@ytxut", "price": 1400},
-    {"display": "@vzi##", "full": "@vzifo", "price": 1400},
-    {"display": "@kaq##", "full": "@kaqii", "price": 1400},
-    {"display": "@qaj##", "full": "@qajod", "price": 1400},
-    {"display": "@obn##", "full": "@obnir", "price": 1400},
 ]
 
 # Преобразуем в словарь для быстрого доступа
@@ -152,6 +106,8 @@ usernames_dict = {u["full"]: u for u in USERNAMES}
 
 # Хранилище предложений
 user_offers = {}
+# Хранилище активных чатов
+active_chats = {}
 
 # Настройка логирования
 logging.basicConfig(
@@ -162,6 +118,7 @@ logging.basicConfig(
 # ========== ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ ==========
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Старт для пользователя"""
     await update.message.reply_text(
         f"👋 Привет, {update.effective_user.first_name}!\n\n"
         "Я помогу купить короткий Telegram-юзернейм.\n\n"
@@ -170,6 +127,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Помощь"""
     await update.message.reply_text(
         "🔍 **Как купить:**\n"
         "1. /list — посмотреть доступные имена\n"
@@ -179,11 +137,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список доступных имён"""
     available = USERNAMES
+    
     if not available:
         await update.message.reply_text("😔 Сейчас нет доступных имён.")
         return
     
+    # Разбиваем на страницы по 20 имён
     page = context.user_data.get("page", 0)
     start_idx = page * 20
     end_idx = min(start_idx + 20, len(available))
@@ -197,6 +158,7 @@ async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"select_{u['full']}"
         )])
     
+    # Кнопки навигации
     nav_buttons = []
     if page > 0:
         nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data="prev_page"))
@@ -209,21 +171,27 @@ async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def page_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Навигация по страницам"""
     query = update.callback_query
     await query.answer()
+    
     page = context.user_data.get("page", 0)
+    
     if query.data == "next_page":
         context.user_data["page"] = page + 1
     elif query.data == "prev_page":
         context.user_data["page"] = max(0, page - 1)
+    
     await list_usernames(update, context)
 
 async def select_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пользователь выбрал имя"""
     query = update.callback_query
     await query.answer()
     
     full_username = query.data.replace("select_", "")
     context.user_data["selected_username"] = full_username
+    
     u = usernames_dict[full_username]
     
     await query.edit_message_text(
@@ -237,12 +205,14 @@ async def select_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_FOR_PRICE
 
 async def back_to_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вернуться к списку"""
     query = update.callback_query
     await query.answer()
     await list_usernames(update, context)
     return ConversationHandler.END
 
 async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получает цену от пользователя"""
     try:
         price = int(update.message.text.strip())
         if price < 100:
@@ -256,6 +226,7 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     u = usernames_dict[username]
     
+    # Сохраняем предложение
     user_offers[user_id] = {
         "username": username,
         "offer_price": price,
@@ -263,6 +234,7 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "user_name": update.effective_user.full_name
     }
     
+    # Отправляем админу
     keyboard = [
         [
             InlineKeyboardButton("✅ Принять", callback_data=f"accept_{user_id}"),
@@ -292,11 +264,13 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== АДМИН-КОМАНДЫ ==========
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Панель администратора"""
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Доступ запрещён")
         return
     
     waiting_users = list(user_offers.keys())
+    
     text = "👨‍💻 **Панель администратора**\n\n"
     text += f"📊 Всего имён в базе: {len(USERNAMES)}\n"
     text += f"👥 Ожидают ответа: {len(waiting_users)}\n\n"
@@ -315,6 +289,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def waiting_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает список ожидающих пользователей"""
     query = update.callback_query
     await query.answer()
     
@@ -333,11 +308,14 @@ async def waiting_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )])
     
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_back")])
+    
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик админских callback'ов"""
     query = update.callback_query
     await query.answer()
+    
     data = query.data
     
     if data.startswith("accept_"):
@@ -359,13 +337,8 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
                 f"Имя твоё! Приятного использования 🚀"
             )
             
-            # Активируем чат для пользователя
-            context.bot_data[f"chat_{user_id}"] = True
-            context.user_data["chatting_with"] = user_id
-            
             await query.edit_message_text(
-                f"✅ Имя {full_username} передано пользователю {offer['user_name']}\n"
-                f"💬 Теперь ты можешь с ним общаться"
+                f"✅ Имя {full_username} передано пользователю {offer['user_name']}"
             )
             del user_offers[user_id]
     
@@ -387,8 +360,9 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         offer = user_offers.get(user_id)
         
         if offer:
-            # Активируем чат для пользователя
-            context.bot_data[f"chat_{user_id}"] = True
+            # Активируем чат
+            active_chats[user_id] = True
+            context.user_data["chatting_with"] = user_id
             
             await context.bot.send_message(
                 user_id,
@@ -396,7 +370,6 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
                 f"Теперь ты можешь писать сюда, и сообщения будут доставлены."
             )
             
-            context.user_data["chatting_with"] = user_id
             await query.edit_message_text(
                 f"💬 Ты начал чат с {offer['user_name']}\n"
                 f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
@@ -410,50 +383,54 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 # ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
 
-async def chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Пересылает сообщения админа пользователю"""
-    if update.effective_user.id != ADMIN_ID:
-        return
-    
-    chat_with = context.user_data.get("chatting_with")
-    if not chat_with:
-        await update.message.reply_text("❌ Сначала начни чат с пользователем")
-        return
-    
-    text = update.message.text
-    await context.bot.send_message(chat_with, f"💬 **Администратор:**\n\n{text}")
-    await update.message.reply_text("✅ Отправлено")
-
-async def user_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Пересылает сообщения пользователя админу"""
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Единый обработчик всех текстовых сообщений"""
     user_id = update.effective_user.id
+    
+    # Админ
     if user_id == ADMIN_ID:
+        # Проверяем, есть ли активный чат
+        chat_with = context.user_data.get("chatting_with")
+        if chat_with:
+            text = update.message.text
+            await context.bot.send_message(chat_with, f"💬 **Администратор:**\n\n{text}")
+            await update.message.reply_text("✅ Отправлено")
+        else:
+            await update.message.reply_text(
+                "👋 Используй /admin для панели управления"
+            )
         return
     
-    # Проверяем, активен ли чат для этого пользователя
-    chat_active = context.bot_data.get(f"chat_{user_id}", False)
-    
-    if chat_active:
+    # Пользователь
+    # Проверяем, активен ли чат
+    if active_chats.get(user_id, False):
         text = update.message.text
         await context.bot.send_message(
             ADMIN_ID,
-            f"💬 **Сообщение от пользователя:**\n\n{text}"
+            f"💬 **Сообщение от пользователя {update.effective_user.full_name}:**\n\n{text}"
         )
         await update.message.reply_text("✅ Отправлено администратору")
     else:
-        await update.message.reply_text(
-            "👋 Чтобы начать, используй /list и выбери понравившееся имя."
-        )
+        # Проверяем, не находится ли пользователь в диалоге
+        if context.user_data.get("selected_username"):
+            # Уже в диалоге, просто игнорируем (ConversationHandler сам обработает)
+            return
+        else:
+            await update.message.reply_text(
+                "👋 Чтобы начать, используй /list и выбери понравившееся имя."
+            )
 
 async def end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Завершает чат с пользователем"""
     if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Эта команда только для администратора")
         return
     
     chat_with = context.user_data.get("chatting_with")
     if chat_with:
-        # Деактивируем чат для пользователя
-        context.bot_data[f"chat_{chat_with}"] = False
+        # Деактивируем чат
+        if chat_with in active_chats:
+            del active_chats[chat_with]
         context.user_data.pop("chatting_with", None)
         await update.message.reply_text("✅ Чат завершён")
     else:
@@ -483,26 +460,16 @@ def main():
     application.add_handler(CommandHandler("list", list_usernames))
     application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("endchat", end_chat))
-    application.add_handler(conv_handler)
     
-    # Навигация по страницам
+    # Обработчики callback-запросов
     application.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
-    
-    # Callback handlers
     application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(accept_|reject_|chat_|waiting_list|admin_back|reply_).*"))
     application.add_handler(CallbackQueryHandler(back_to_list, pattern="^back_to_list$"))
+    application.add_handler(CallbackQueryHandler(select_username, pattern="^select_"))
     
-    # Обработчики сообщений
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
-        chat_message,
-        filters.User(user_id=ADMIN_ID)
-    ))
-    
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
-        user_to_admin
-    ))
+    # Единый обработчик для всех текстовых сообщений (должен быть последним)
+    application.add_handler(conv_handler)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     print("✅ Бот готов к работе!")
     print(f"👤 Админ ID: {ADMIN_ID}")
