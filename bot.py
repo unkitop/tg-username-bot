@@ -359,15 +359,26 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             del user_offers[user_id]
     
     elif data.startswith("chat_"):
-        user_id = int(data.replace("chat_", ""))
-        offer = user_offers.get(user_id)
-        if offer:
-            context.user_data["chatting_with"] = user_id
-            await query.edit_message_text(
-                f"💬 Ты начал чат с {offer['user_name']}\n"
-                f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
-                f"Чтобы выйти из чата, напиши /endchat"
-            )
+    user_id = int(data.replace("chat_", ""))
+    offer = user_offers.get(user_id)
+    
+    if offer:
+        # Активируем чат для пользователя
+        context.bot_data[f"chat_{user_id}"] = True
+        
+        # Сообщаем пользователю, что админ начал чат
+        await context.bot.send_message(
+            user_id,
+            f"💬 Администратор начал с тобой чат!\n"
+            f"Теперь ты можешь писать сюда, и сообщения будут доставлены."
+        )
+        
+        context.user_data["chatting_with"] = user_id
+        await query.edit_message_text(
+            f"💬 Ты начал чат с {offer['user_name']}\n"
+            f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
+            f"Чтобы выйти из чата, напиши /endchat"
+        )
     
     elif data == "waiting_list":
         await waiting_list(update, context)
