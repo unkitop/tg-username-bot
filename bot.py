@@ -28,6 +28,15 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS nicknames
      custom_nick TEXT)''')
 conn.commit()
 
+# ==================== ФУНКЦИЯ ЭКРАНИРОВАНИЯ ====================
+
+def escape_markdown(text):
+    """Экранирует спецсимволы для Markdown V2"""
+    chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in chars:
+        text = text.replace(char, f'\\{char}')
+    return text
+
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 def get_display_name(user_id, username, display_name):
@@ -39,10 +48,12 @@ def get_display_name(user_id, username, display_name):
 
 def get_profile_link(user_id, username, display_name):
     name = get_display_name(user_id, username, display_name)
+    # Экранируем имя для Markdown
+    name_escaped = escape_markdown(name)
     if username:
-        return f"[{name}](https://t.me/{username})"
+        return f"[{name_escaped}](https://t.me/{username})"
     else:
-        return f"[{name}](tg://user?id={user_id})"
+        return f"[{name_escaped}](tg://user?id={user_id})"
 
 def get_period_dates(period):
     now = datetime.now()
@@ -55,14 +66,14 @@ def get_period_dates(period):
         monday = today - timedelta(days=today.weekday())
         since = datetime.combine(monday, datetime.min.time())
         until = now
-        period_name = f"за текущую неделю ({monday.strftime('%d.%m')} – {today.strftime('%d.%m')})"
+        period_name = f"за текущую неделю \\({monday.strftime('%d\\.%m')} – {today.strftime('%d\\.%m')}\\)"
     elif period == 'last_week':
         today = now.date()
         last_monday = today - timedelta(days=today.weekday() + 7)
         last_sunday = last_monday + timedelta(days=6)
         since = datetime.combine(last_monday, datetime.min.time())
         until = datetime.combine(last_sunday, datetime.max.time())
-        period_name = f"за прошлую неделю ({last_monday.strftime('%d.%m')} – {last_sunday.strftime('%d.%m')})"
+        period_name = f"за прошлую неделю \\({last_monday.strftime('%d\\.%m')} – {last_sunday.strftime('%d\\.%m')}\\)"
     elif period == 'all':
         since = datetime(2000, 1, 1)
         until = now
@@ -143,11 +154,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     chat_type = update.message.chat.type
     
-    # ===== ЛИЧНЫЕ СООБЩЕНИЯ (private) =====
+    # ===== ЛИЧНЫЕ СООБЩЕНИЯ =====
     if chat_type == 'private':
-        welcome_text = f"""👋 *Привет, {user.full_name}!*
+        welcome_text = f"""👋 *Привет, {escape_markdown(user.full_name)}\\!*
 
-Я — бот-статистик для групповых чатов Telegram.
+Я — бот\\-статистик для групповых чатов Telegram\\.
 
 📊 *Что я умею:*
 • Считаю сообщения участников в группе
