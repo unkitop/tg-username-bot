@@ -32,6 +32,8 @@ conn.commit()
 
 def escape_markdown(text):
     """Экранирует спецсимволы для Markdown V2"""
+    if not text:
+        return ""
     chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in chars:
         text = text.replace(char, f'\\{char}')
@@ -44,11 +46,14 @@ def get_display_name(user_id, username, display_name):
     result = cursor.fetchone()
     if result:
         return result[0]
-    return username or display_name
+    if username:
+        return username
+    if display_name:
+        return display_name
+    return "Пользователь"
 
 def get_profile_link(user_id, username, display_name):
     name = get_display_name(user_id, username, display_name)
-    # Экранируем имя для Markdown
     name_escaped = escape_markdown(name)
     if username:
         return f"[{name_escaped}](https://t.me/{username})"
@@ -57,27 +62,36 @@ def get_profile_link(user_id, username, display_name):
 
 def get_period_dates(period):
     now = datetime.now()
+    
     if period == 'day':
         since = now - timedelta(hours=24)
         until = now
         period_name = "за 24 часа"
+        
     elif period == 'week':
         today = now.date()
         monday = today - timedelta(days=today.weekday())
         since = datetime.combine(monday, datetime.min.time())
         until = now
-        period_name = f"за текущую неделю \\({monday.strftime('%d\\.%m')} – {today.strftime('%d\\.%m')}\\)"
+        monday_str = monday.strftime('%d.%m')
+        today_str = today.strftime('%d.%m')
+        period_name = f"за текущую неделю \\({monday_str} – {today_str}\\)"
+        
     elif period == 'last_week':
         today = now.date()
         last_monday = today - timedelta(days=today.weekday() + 7)
         last_sunday = last_monday + timedelta(days=6)
         since = datetime.combine(last_monday, datetime.min.time())
         until = datetime.combine(last_sunday, datetime.max.time())
-        period_name = f"за прошлую неделю \\({last_monday.strftime('%d\\.%m')} – {last_sunday.strftime('%d\\.%m')}\\)"
+        monday_str = last_monday.strftime('%d.%m')
+        sunday_str = last_sunday.strftime('%d.%m')
+        period_name = f"за прошлую неделю \\({monday_str} – {sunday_str}\\)"
+        
     elif period == 'all':
         since = datetime(2000, 1, 1)
         until = now
         period_name = "за всё время"
+        
     else:
         since = now - timedelta(hours=24)
         until = now
@@ -149,6 +163,9 @@ def get_keyboard(page, total_pages, period, chat_id):
 # ==================== ОБРАБОТЧИКИ ====================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+    
     message_text = update.message.text.strip()
     chat_id = update.effective_chat.id
     user = update.message.from_user
@@ -156,7 +173,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ===== ЛИЧНЫЕ СООБЩЕНИЯ =====
     if chat_type == 'private':
-        welcome_text = f"""👋 *Привет, {escape_markdown(user.full_name)}\\!*
+        user_name = escape_markdown(user.full_name or "Пользователь")
+        welcome_text = f"""👋 *Привет, {user_name}\\!*
 
 Я — бот\\-статистик для групповых чатов Telegram\\.
 
