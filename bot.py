@@ -6,7 +6,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # ==================== НАСТРОЙКИ ====================
 
 BOT_TOKEN = "8755825898:AAGqUoGs8YtOY3IZ_YMYMUHWkG5gk4GYjik"
-
 ADMIN_IDS = [7034951533, 7444090752]
 
 # ===================================================
@@ -31,11 +30,9 @@ conn.commit()
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 def is_admin(user_id):
-    """Проверка, является ли пользователь администратором"""
     return user_id in ADMIN_IDS
 
 def get_display_name(user_id, username, display_name):
-    """Получить отображаемое имя (псевдоним или реальное)"""
     cursor.execute('SELECT custom_nick FROM nicknames WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
     if result:
@@ -43,7 +40,6 @@ def get_display_name(user_id, username, display_name):
     return username or display_name
 
 def get_period_dates(period):
-    """Получить начальную и конечную дату для периода"""
     now = datetime.now()
     if period == 'day':
         since = now - timedelta(hours=24)
@@ -74,7 +70,6 @@ def get_period_dates(period):
     return since, until, period_name
 
 def get_stats_data(since, until, chat_id=None):
-    """Получить статистику за период"""
     query = '''
         SELECT user_id, username, display_name, COUNT(*) as msg_count
         FROM messages
@@ -99,7 +94,6 @@ def get_stats_data(since, until, chat_id=None):
     return stats
 
 def format_stats_page(stats, page, per_page, period_name):
-    """Форматировать страницу статистики"""
     total = len(stats)
     total_pages = (total + per_page - 1) // per_page
     
@@ -120,7 +114,6 @@ def format_stats_page(stats, page, per_page, period_name):
     return "\n".join(lines), page, total_pages
 
 def get_keyboard(page, total_pages, period, chat_id):
-    """Создать клавиатуру с кнопками навигации"""
     keyboard = []
     row = []
     
@@ -137,19 +130,79 @@ def get_keyboard(page, total_pages, period, chat_id):
     
     return InlineKeyboardMarkup(keyboard)
 
-# ==================== ОБРАБОТЧИКИ КОМАНД ====================
+# ==================== ОБРАБОТЧИКИ СООБЩЕНИЙ ====================
 
-async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Пассивный трекинг всех сообщений"""
-    if update.message and update.message.from_user and update.message.chat.type in ['group', 'supergroup']:
-        user = update.message.from_user
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка всех текстовых сообщений"""
+    message_text = update.message.text.strip().lower()
+    chat_id = update.effective_chat.id
+    user = update.message.from_user
+    
+    # Сначала записываем сообщение в статистику (если это группа)
+    if update.message.chat.type in ['group', 'supergroup']:
         timestamp = datetime.now()
-        
         cursor.execute('''
             INSERT INTO messages (user_id, username, display_name, chat_id, timestamp)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user.id, user.username, user.full_name, update.message.chat_id, timestamp))
+        ''', (user.id, user.username, user.full_name, chat_id, timestamp))
         conn.commit()
+    
+    # Проверяем команды с ¡
+    if message_text.startswith('¡'):
+        # Убираем ¡ и разбиваем на части
+        command_text = message_text[1:].strip()
+        parts = command_text.split()
+        
+        if not parts:
+            return
+        
+        cmd = parts[0]
+        
+        # ¡стата день
+        if cmd in ['стата', 'статистика']:
+            if len(parts) >= 2:
+                subcmd = parts[1]
+                if subcmd in ['день', 'day']:
+                    await send_stats(update, context, 'day')
+                elif subcmd in ['неделя', 'неделю', 'week']:
+                    await send_stats(update, context, 'week')
+                elif subcmd in ['прошлая', 'прошлую'] and len(parts) >= 3 and parts[2] in ['неделя', 'неделю']:
+                    await send_stats(update, context, 'last_week')
+                elif subcmd in ['вся', 'всё', 'all']:
+                    await send_stats(update, context, 'all')
+                else:
+                    # По умолчанию - день
+                    await send_stats(update, context, 'day')
+            else:
+                # Просто "¡стата" - показываем день
+                await send_stats(update, context, 'day')
+        
+        # ¡новый ник "Имя"
+        elif cmd in ['новый', 'ник', 'новый_ник']:
+            # Ищем ник в кавычках или все слова после команды
+            if 'ник' in cmd and len(parts) >= 2:
+                nick_part = " ".join(parts[1:])
+            elif len(parts) >= 3 and parts[1] == 'ник':
+                nick_part = " ".join(parts[2:])
+            else:
+                nick_part = " ".join(parts[1:])
+            
+            # Убираем кавычки если есть
+            nick = nick_part.strip('"\'')
+            
+            if nick:
+                cursor.execute('INSERT OR REPLACE INTO nicknames (user_id, custom_nick) VALUES (?, ?)',
+                               (user.id, nick))
+                conn.commit()
+                await update.message.reply_text(f"✅ Ник установлен: {nick}")
+            else:
+                await update.message.reply_text('❌ Укажите ник: ¡новый ник "Ваше Имя"')
+        
+        # ¡удали ник
+        elif cmd in ['удали', 'удалить'] and len(parts) >= 2 and parts[1] == 'ник':
+            cursor.execute('DELETE FROM nicknames WHERE user_id = ?', (user.id,))
+            conn.commit()
+            await update.message.reply_text("✅ Ник удалён, используется реальное имя")
 
 async def send_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, period):
     """Отправить статистику с кнопками"""
@@ -170,39 +223,6 @@ async def send_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, period)
     context.chat_data[f'period_name_{period}'] = period_name
     
     await update.message.reply_text(text, reply_markup=keyboard)
-
-async def stats_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_stats(update, context, 'day')
-
-async def stats_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_stats(update, context, 'week')
-
-async def stats_last_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_stats(update, context, 'last_week')
-
-async def stats_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_stats(update, context, 'all')
-
-async def set_nick(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Установить псевдоним"""
-    if not context.args:
-        await update.message.reply_text("❌ Укажите ник: ¡новый ник \"Ваш ник\"")
-        return
-    
-    user_id = update.message.from_user.id
-    nick = " ".join(context.args)
-    
-    cursor.execute('INSERT OR REPLACE INTO nicknames (user_id, custom_nick) VALUES (?, ?)',
-                   (user_id, nick))
-    conn.commit()
-    await update.message.reply_text(f"✅ Ник установлен: {nick}")
-
-async def delete_nick(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удалить псевдоним"""
-    user_id = update.message.from_user.id
-    cursor.execute('DELETE FROM nicknames WHERE user_id = ?', (user_id,))
-    conn.commit()
-    await update.message.reply_text("✅ Ник удалён, используется реальное имя")
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка нажатий на кнопки"""
@@ -243,21 +263,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     
-    app.add_handler(CommandHandler("стата", stats_day))
-    app.add_handler(CommandHandler("стата_день", stats_day))
-    app.add_handler(CommandHandler("стата_неделя", stats_week))
-    app.add_handler(CommandHandler("стата_вся", stats_all))
-    app.add_handler(CommandHandler("стата_прошлая_неделя", stats_last_week))
+    # Обработчик всех текстовых сообщений (ловит ¡команды)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    app.add_handler(CommandHandler("новый_ник", set_nick))
-    app.add_handler(CommandHandler("удали_ник", delete_nick))
-    
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
-    
+    # Обработчик кнопок
     app.add_handler(CallbackQueryHandler(button_callback))
     
     print("✅ Бот запущен!")
+    print("📋 Доступные команды в чате:")
+    print("   ¡стата день - статистика за 24 часа")
+    print("   ¡стата неделя - статистика за текущую неделю")
+    print("   ¡стата прошлая неделя - статистика за прошлую неделю")
+    print("   ¡стата вся - статистика за всё время")
+    print('   ¡новый ник "Имя" - установить псевдоним')
+    print("   ¡удали ник - удалить псевдоним")
     print(f"👑 Администраторы: {ADMIN_IDS}")
+    
     app.run_polling()
 
 if __name__ == "__main__":
