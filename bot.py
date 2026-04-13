@@ -1,490 +1,268 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import logging
-from datetime import datetime
+import os
+import sqlite3
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-    ConversationHandler
-)
-import time
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
-# ===== ТВОИ ДАННЫЕ =====
-BOT_TOKEN = "8792343001:AAFsJpRWHvfNw8YCdbAuETosfGYqPfzD_zQ"
-ADMIN_ID = 7444090752
-# =======================
+# Инициализация БД
+conn = sqlite3.connect('stats.db', check_same_thread=False)
+cursor = conn.cursor()
 
-WAITING_FOR_PRICE = 1
+cursor.execute('''CREATE TABLE IF NOT EXISTS messages
+    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+     user_id INTEGER,
+     username TEXT,
+     display_name TEXT,
+     chat_id INTEGER,
+     timestamp DATETIME)''')
 
-# ==== ТВОЙ СПИСОК ЮЗЕРНЕЙМОВ ====
-USERNAMES = [
-    {"display": "@qni##", "full": "@qnicy", "price": 2100},
-    {"display": "@hoj##", "full": "@hojys", "price": 1900},
-    {"display": "@qiq##", "full": "@qiqku", "price": 1800},
-    {"display": "@qax##", "full": "@qaxeu", "price": 1800},
-    {"display": "@xjq##", "full": "@xjoqe", "price": 1800},
-    {"display": "@apl##", "full": "@aplic", "price": 1800},
-    {"display": "@qmu##", "full": "@qmuzu", "price": 1800},
-    {"display": "@zdy##", "full": "@zdyqu", "price": 1800},
-    {"display": "@xyv##", "full": "@xyvyu", "price": 1700},
-    {"display": "@kaw##", "full": "@kawen", "price": 1700},
-    {"display": "@riw##", "full": "@riwti", "price": 1700},
-    {"display": "@axb##", "full": "@axbux", "price": 1700},
-    {"display": "@ifv##", "full": "@ifveh", "price": 1700},
-    {"display": "@vyf##", "full": "@vyfab", "price": 1700},
-    {"display": "@qit##", "full": "@qitcu", "price": 1600},
-    {"display": "@saq##", "full": "@saqgo", "price": 1500},
-    {"display": "@nut##", "full": "@nutvy", "price": 1500},
-    {"display": "@qyb##", "full": "@qybpe", "price": 1500},
-    {"display": "@jyk##", "full": "@jykbe", "price": 1500},
-    {"display": "@cmy##", "full": "@cmyvo", "price": 1500},
-    {"display": "@cyj##", "full": "@cyjpo", "price": 1500},
-    {"display": "@qym##", "full": "@qymau", "price": 1500},
-    {"display": "@amc##", "full": "@amcyx", "price": 1500},
-    {"display": "@xdy##", "full": "@xdyci", "price": 1500},
-    {"display": "@uxg##", "full": "@uxgec", "price": 1500},
-    {"display": "@gmy##", "full": "@gmyje", "price": 1500},
-    {"display": "@qjy##", "full": "@qjycy", "price": 1500},
-    {"display": "@ikv##", "full": "@ikvys", "price": 1500},
-    {"display": "@guv##", "full": "@guvmu", "price": 1500},
-    {"display": "@ipm##", "full": "@ipmif", "price": 1500},
-    {"display": "@qav##", "full": "@qavpe", "price": 1500},
-    {"display": "@vyj##", "full": "@vyjdo", "price": 1500},
-    {"display": "@cuj##", "full": "@cujav", "price": 1500},
-    {"display": "@ujx##", "full": "@ujxyt", "price": 1500},
-    {"display": "@jap##", "full": "@japby", "price": 1500},
-    {"display": "@tgo##", "full": "@tgojy", "price": 1500},
-    {"display": "@pyg##", "full": "@pygto", "price": 1500},
-    {"display": "@zyf##", "full": "@zyfib", "price": 1500},
-    {"display": "@qyk##", "full": "@qykae", "price": 1500},
-    {"display": "@qvy##", "full": "@qvynu", "price": 1500},
-    {"display": "@hjy##", "full": "@hjyne", "price": 1500},
-    {"display": "@ujm##", "full": "@ujmaw", "price": 1500},
-    {"display": "@epn##", "full": "@epnyx", "price": 1500},
-    {"display": "@pqu##", "full": "@pquga", "price": 1500},
-    {"display": "@jfu##", "full": "@jfuke", "price": 1500},
-    {"display": "@gag##", "full": "@gagir", "price": 1500},
-    {"display": "@byq##", "full": "@byqym", "price": 1500},
-    {"display": "@ehw##", "full": "@ehwip", "price": 1500},
-    {"display": "@ukm##", "full": "@ukmiq", "price": 1500},
-    {"display": "@ucq##", "full": "@ucqax", "price": 1500},
-    {"display": "@jyh##", "full": "@jyhso", "price": 1500},
-    {"display": "@wug##", "full": "@wugya", "price": 1500},
-    {"display": "@ral##", "full": "@ralau", "price": 1500},
-    {"display": "@meq##", "full": "@meqyv", "price": 1500},
-    {"display": "@guj##", "full": "@gujpy", "price": 1500},
-    {"display": "@rfy##", "full": "@rfyha", "price": 1500},
-    {"display": "@qve##", "full": "@qvece", "price": 1500},
-    {"display": "@afj##", "full": "@afjiv", "price": 1500},
-    {"display": "@zok##", "full": "@zoklu", "price": 1500},
-    {"display": "@ybz##", "full": "@ybzum", "price": 1500},
-    {"display": "@mxu##", "full": "@mxuzu", "price": 1500},
-    {"display": "@qoh##", "full": "@qohau", "price": 1500},
-    {"display": "@xxu##", "full": "@xxuwy", "price": 1500},
-    {"display": "@dyh##", "full": "@dyhud", "price": 1500},
-    {"display": "@otg##", "full": "@otgum", "price": 1500},
-    {"display": "@zof##", "full": "@zofla", "price": 1500},
-    {"display": "@ezx##", "full": "@ezxum", "price": 1500},
-    {"display": "@wud##", "full": "@wudva", "price": 1500},
-    {"display": "@jux##", "full": "@juxge", "price": 1500},
-    {"display": "@wej##", "full": "@wejyw", "price": 1500},
-    {"display": "@yvt##", "full": "@yvtev", "price": 1500},
-    {"display": "@uhw##", "full": "@uhwuj", "price": 1500},
-    {"display": "@lki##", "full": "@lkivo", "price": 1500},
-    {"display": "@lyq##", "full": "@lyqyz", "price": 1500},
-    {"display": "@omh##", "full": "@omhej", "price": 1500},
-]
+cursor.execute('''CREATE TABLE IF NOT EXISTS nicknames
+    (user_id INTEGER PRIMARY KEY,
+     custom_nick TEXT)''')
+conn.commit()
 
-# Преобразуем в словарь для быстрого доступа
-usernames_dict = {u["full"]: u for u in USERNAMES}
+# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
-# Хранилище предложений
-user_offers = {}
-# Хранилище активных чатов
-active_chats = {}
+def get_display_name(user_id, username, display_name):
+    """Получить отображаемое имя (псевдоним или реальное)"""
+    cursor.execute('SELECT custom_nick FROM nicknames WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+    return username or display_name
 
-# Настройка логирования
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
-# ========== ПОЛЬЗОВАТЕЛЬСКИЕ КОМАНДЫ ==========
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Старт для пользователя"""
-    await update.message.reply_text(
-        f"👋 Привет, {update.effective_user.first_name}!\n\n"
-        "Я помогу купить короткий Telegram-юзернейм.\n\n"
-        "📋 Список доступных: /list\n"
-        "❓ Помощь: /help"
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Помощь"""
-    await update.message.reply_text(
-        "🔍 **Как купить:**\n"
-        "1. /list — посмотреть доступные имена\n"
-        "2. Нажми на понравившееся\n"
-        "3. Напиши свою цену\n"
-        "4. Дождись ответа администратора"
-    )
-
-async def list_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает список доступных имён"""
-    available = USERNAMES
+def get_period_dates(period):
+    """Получить начальную и конечную дату для периода"""
+    now = datetime.now()
+    if period == 'day':
+        since = now - timedelta(hours=24)
+        until = now
+        period_name = "за 24 часа"
+    elif period == 'week':
+        today = now.date()
+        monday = today - timedelta(days=today.weekday())
+        since = datetime.combine(monday, datetime.min.time())
+        until = now
+        period_name = f"за текущую неделю ({monday.strftime('%d.%m')} – {today.strftime('%d.%m')})"
+    elif period == 'last_week':
+        today = now.date()
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        last_sunday = last_monday + timedelta(days=6)
+        since = datetime.combine(last_monday, datetime.min.time())
+        until = datetime.combine(last_sunday, datetime.max.time())
+        period_name = f"за прошлую неделю ({last_monday.strftime('%d.%m')} – {last_sunday.strftime('%d.%m')})"
+    elif period == 'all':
+        since = datetime(2000, 1, 1)
+        until = now
+        period_name = "за всё время"
+    else:
+        since = now - timedelta(hours=24)
+        until = now
+        period_name = "за 24 часа"
     
-    if not available:
-        await update.message.reply_text("😔 Сейчас нет доступных имён.")
-        return
+    return since, until, period_name
+
+def get_stats_data(since, until, chat_id=None):
+    """Получить статистику за период"""
+    query = '''
+        SELECT user_id, username, display_name, COUNT(*) as msg_count
+        FROM messages
+        WHERE timestamp BETWEEN ? AND ?
+    '''
+    params = [since, until]
     
-    # Разбиваем на страницы по 20 имён
-    page = context.user_data.get("page", 0)
-    start_idx = page * 20
-    end_idx = min(start_idx + 20, len(available))
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
     
-    text = f"📋 **Доступные юзернеймы (страница {page + 1}):**\n\n"
+    stats = []
+    for user_id, username, display_name, count in rows:
+        name = get_display_name(user_id, username, display_name)
+        stats.append({
+            'user_id': user_id,
+            'name': name,
+            'username': username,
+            'count': count
+        })
+    
+    # Сортировка по количеству сообщений (по убыванию)
+    stats.sort(key=lambda x: x['count'], reverse=True)
+    return stats
+
+def format_stats_page(stats, page, per_page, period_name):
+    """Форматировать страницу статистики"""
+    total = len(stats)
+    total_pages = (total + per_page - 1) // per_page
+    
+    if total == 0:
+        return f"📊 Нет сообщений {period_name}", 0, 0
+    
+    start = (page - 1) * per_page
+    end = min(start + per_page, total)
+    
+    lines = [f"📊 Статистика {period_name}:\n"]
+    
+    for i in range(start, end):
+        stat = stats[i]
+        lines.append(f"{i+1}. {stat['name']} — {stat['count']} сообщ.")
+    
+    lines.append(f"\nСтраница {page}/{total_pages}")
+    
+    return "\n".join(lines), page, total_pages
+
+def get_keyboard(page, total_pages, period, chat_id):
+    """Создать клавиатуру с кнопками навигации"""
     keyboard = []
+    row = []
     
-    for u in available[start_idx:end_idx]:
-        keyboard.append([InlineKeyboardButton(
-            f"{u['display']} — {u['price']}₽", 
-            callback_data=f"select_{u['full']}"
-        )])
+    if page > 1:
+        row.append(InlineKeyboardButton("🠐 Назад", callback_data=f"page_{period}_{page-1}_{chat_id}"))
     
-    # Кнопки навигации
-    nav_buttons = []
-    if page > 0:
-        nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data="prev_page"))
-    if end_idx < len(available):
-        nav_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data="next_page"))
+    if page < total_pages:
+        row.append(InlineKeyboardButton("Вперёд ➔", callback_data=f"page_{period}_{page+1}_{chat_id}"))
     
-    if nav_buttons:
-        keyboard.append(nav_buttons)
+    if row:
+        keyboard.append(row)
     
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard.append([InlineKeyboardButton("❌ Закрыть", callback_data="close")])
+    
+    return InlineKeyboardMarkup(keyboard)
 
-async def page_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Навигация по страницам"""
-    query = update.callback_query
-    await query.answer()
-    
-    page = context.user_data.get("page", 0)
-    
-    if query.data == "next_page":
-        context.user_data["page"] = page + 1
-    elif query.data == "prev_page":
-        context.user_data["page"] = max(0, page - 1)
-    
-    await list_usernames(update, context)
+# ==================== ОБРАБОТЧИКИ КОМАНД ====================
 
-async def select_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Пользователь выбрал имя"""
-    query = update.callback_query
-    await query.answer()
-    
-    full_username = query.data.replace("select_", "")
-    context.user_data["selected_username"] = full_username
-    
-    u = usernames_dict[full_username]
-    
-    await query.edit_message_text(
-        f"✅ Ты выбрал: {u['display']}\n\n"
-        f"💰 Базовая цена: {u['price']}₽\n\n"
-        "✍️ **Напиши свою цену** (только число, в рублях):",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]
-        ])
-    )
-    return WAITING_FOR_PRICE
+async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пассивный трекинг всех сообщений"""
+    if update.message and update.message.from_user and update.message.chat.type in ['group', 'supergroup']:
+        user = update.message.from_user
+        timestamp = datetime.now()
+        
+        cursor.execute('''
+            INSERT INTO messages (user_id, username, display_name, chat_id, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user.id, user.username, user.full_name, update.message.chat_id, timestamp))
+        conn.commit()
 
-async def back_to_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вернуться к списку"""
-    query = update.callback_query
-    await query.answer()
-    await list_usernames(update, context)
-    return ConversationHandler.END
-
-async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получает цену от пользователя"""
-    try:
-        price = int(update.message.text.strip())
-        if price < 100:
-            await update.message.reply_text("❌ Цена должна быть от 100₽")
-            return WAITING_FOR_PRICE
-    except ValueError:
-        await update.message.reply_text("❌ Напиши число (например: 2500)")
-        return WAITING_FOR_PRICE
+async def send_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, period):
+    """Отправить статистику с кнопками"""
+    chat_id = update.effective_chat.id
     
-    username = context.user_data.get("selected_username")
-    user_id = update.effective_user.id
-    u = usernames_dict[username]
+    since, until, period_name = get_period_dates(period)
+    stats = get_stats_data(since, until, chat_id)
     
-    # Сохраняем предложение
-    user_offers[user_id] = {
-        "username": username,
-        "offer_price": price,
-        "display": u["display"],
-        "user_name": update.effective_user.full_name
-    }
+    text, page, total_pages = format_stats_page(stats, 1, 10, period_name)
     
-    # Отправляем админу
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Принять", callback_data=f"accept_{user_id}"),
-            InlineKeyboardButton("❌ Отклонить", callback_data=f"reject_{user_id}")
-        ],
-        [InlineKeyboardButton("💬 Написать покупателю", callback_data=f"chat_{user_id}")]
-    ]
-    
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"🆕 **Новое предложение!**\n\n"
-            f"👤 Покупатель: {update.effective_user.full_name}\n"
-            f"📛 Юзернейм: {u['display']}\n"
-            f"💰 Предложенная цена: {price}₽",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    except Exception as e:
-        logging.error(f"Ошибка отправки админу: {e}")
-    
-    await update.message.reply_text(
-        f"✅ Твоё предложение по {u['display']} отправлено!\n"
-        "Администратор скоро ответит."
-    )
-    return ConversationHandler.END
-
-# ========== АДМИН-КОМАНДЫ ==========
-
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель администратора"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ Доступ запрещён")
+    if total_pages == 0:
+        await update.message.reply_text(text)
         return
     
-    waiting_users = list(user_offers.keys())
+    keyboard = get_keyboard(1, total_pages, period, chat_id)
     
-    text = "👨‍💻 **Панель администратора**\n\n"
-    text += f"📊 Всего имён в базе: {len(USERNAMES)}\n"
-    text += f"👥 Ожидают ответа: {len(waiting_users)}\n\n"
+    # Сохраняем данные в context для callback
+    context.chat_data[f'stats_{period}'] = stats
+    context.chat_data[f'period_name_{period}'] = period_name
     
-    if waiting_users:
-        text += "**Ожидающие пользователи:**\n"
-        for user_id in waiting_users[:5]:
-            offer = user_offers[user_id]
-            text += f"• {offer['user_name']} — {offer['display']} — {offer['offer_price']}₽\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("👥 Список ожидающих", callback_data="waiting_list")],
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")]
-    ]
-    
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(text, reply_markup=keyboard)
 
-async def waiting_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает список ожидающих пользователей"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not user_offers:
-        await query.edit_message_text("😴 Нет ожидающих пользователей.")
+async def stats_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_stats(update, context, 'day')
+
+async def stats_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_stats(update, context, 'week')
+
+async def stats_last_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_stats(update, context, 'last_week')
+
+async def stats_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_stats(update, context, 'all')
+
+async def set_nick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Установить псевдоним"""
+    if not context.args:
+        await update.message.reply_text("❌ Укажите ник: ¡новый ник \"Ваш ник\"")
         return
     
-    text = "👥 **Пользователи, ожидающие ответа:**\n\n"
-    keyboard = []
+    user_id = update.message.from_user.id
+    nick = " ".join(context.args)
     
-    for user_id, offer in user_offers.items():
-        text += f"• {offer['user_name']} — {offer['display']} — {offer['offer_price']}₽\n"
-        keyboard.append([InlineKeyboardButton(
-            f"Ответить {offer['user_name']}", 
-            callback_data=f"reply_{user_id}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_back")])
-    
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    cursor.execute('INSERT OR REPLACE INTO nicknames (user_id, custom_nick) VALUES (?, ?)',
+                   (user_id, nick))
+    conn.commit()
+    await update.message.reply_text(f"✅ Ник установлен: {nick}")
 
-async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик админских callback'ов"""
+async def delete_nick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удалить псевдоним"""
+    user_id = update.message.from_user.id
+    cursor.execute('DELETE FROM nicknames WHERE user_id = ?', (user_id,))
+    conn.commit()
+    await update.message.reply_text("✅ Ник удалён, используется реальное имя")
+
+# ==================== ОБРАБОТЧИК КНОПОК ====================
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка нажатий на кнопки"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
     
-    if data.startswith("accept_"):
-        user_id = int(data.replace("accept_", ""))
-        offer = user_offers.get(user_id)
-        
-        if offer:
-            # Отправляем пользователю полное имя
-            full_username = offer['username']
-            await context.bot.send_message(
-                user_id,
-                f"✅ **Поздравляю! Твой юзернейм готов!**\n\n"
-                f"📛 **Имя:** {full_username}\n"
-                f"💰 Цена: {offer['offer_price']}₽\n\n"
-                f"🔐 **Как занять:**\n"
-                f"1. Открой Telegram\n"
-                f"2. Настройки → Имя пользователя\n"
-                f"3. Введи {full_username} и нажми сохранить\n\n"
-                f"Имя твоё! Приятного использования 🚀"
-            )
-            
-            await query.edit_message_text(
-                f"✅ Имя {full_username} передано пользователю {offer['user_name']}"
-            )
-            del user_offers[user_id]
-    
-    elif data.startswith("reject_"):
-        user_id = int(data.replace("reject_", ""))
-        offer = user_offers.get(user_id)
-        
-        if offer:
-            await context.bot.send_message(
-                user_id,
-                f"❌ **Администратор отклонил твоё предложение**\n\n"
-                f"Юзернейм: {offer['display']}"
-            )
-            await query.edit_message_text(f"❌ Предложение от {offer['user_name']} отклонено")
-            del user_offers[user_id]
-    
-    elif data.startswith("chat_"):
-        user_id = int(data.replace("chat_", ""))
-        offer = user_offers.get(user_id)
-        
-        if offer:
-            # Активируем чат
-            active_chats[user_id] = True
-            context.user_data["chatting_with"] = user_id
-            
-            await context.bot.send_message(
-                user_id,
-                f"💬 **Администратор начал с тобой чат!**\n"
-                f"Теперь ты можешь писать сюда, и сообщения будут доставлены."
-            )
-            
-            await query.edit_message_text(
-                f"💬 Ты начал чат с {offer['user_name']}\n"
-                f"Пиши сюда — сообщения будут пересылаться пользователю.\n\n"
-                f"Чтобы выйти из чата, напиши /endchat"
-            )
-    
-    elif data == "waiting_list":
-        await waiting_list(update, context)
-    elif data == "admin_back":
-        await admin_panel(update, context)
-
-# ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Единый обработчик всех текстовых сообщений"""
-    user_id = update.effective_user.id
-    
-    # Админ
-    if user_id == ADMIN_ID:
-        # Проверяем, есть ли активный чат
-        chat_with = context.user_data.get("chatting_with")
-        if chat_with:
-            text = update.message.text
-            await context.bot.send_message(chat_with, f"💬 **Администратор:**\n\n{text}")
-            await update.message.reply_text("✅ Отправлено")
-        else:
-            await update.message.reply_text(
-                "👋 Используй /admin для панели управления"
-            )
+    if data == "close":
+        await query.message.delete()
         return
     
-    # Пользователь
-    # Проверяем, активен ли чат
-    if active_chats.get(user_id, False):
-        text = update.message.text
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"💬 **Сообщение от пользователя {update.effective_user.full_name}:**\n\n{text}"
-        )
-        await update.message.reply_text("✅ Отправлено администратору")
-    else:
-        # Проверяем, не находится ли пользователь в диалоге
-        if context.user_data.get("selected_username"):
-            # Уже в диалоге, просто игнорируем (ConversationHandler сам обработает)
+    # Разбираем callback_data: page_week_2_123456789
+    parts = data.split('_')
+    if len(parts) >= 4 and parts[0] == 'page':
+        period = parts[1]
+        page = int(parts[2])
+        original_chat_id = int(parts[3])
+        
+        # Проверяем, что кнопку нажал тот же пользователь в том же чате
+        if query.message.chat_id != original_chat_id:
             return
-        else:
-            await update.message.reply_text(
-                "👋 Чтобы начать, используй /list и выбери понравившееся имя."
-            )
+        
+        # Получаем сохранённые данные
+        stats = context.chat_data.get(f'stats_{period}')
+        period_name = context.chat_data.get(f'period_name_{period}', '')
+        
+        if not stats:
+            # Если данные потеряны, пересчитываем
+            since, until, period_name = get_period_dates(period)
+            stats = get_stats_data(since, until, original_chat_id)
+            context.chat_data[f'stats_{period}'] = stats
+            context.chat_data[f'period_name_{period}'] = period_name
+        
+        text, current_page, total_pages = format_stats_page(stats, page, 10, period_name)
+        keyboard = get_keyboard(page, total_pages, period, original_chat_id)
+        
+        await query.edit_message_text(text, reply_markup=keyboard)
 
-async def end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Завершает чат с пользователем"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ Эта команда только для администратора")
-        return
-    
-    chat_with = context.user_data.get("chatting_with")
-    if chat_with:
-        # Деактивируем чат
-        if chat_with in active_chats:
-            del active_chats[chat_with]
-        context.user_data.pop("chatting_with", None)
-        await update.message.reply_text("✅ Чат завершён")
-    else:
-        await update.message.reply_text("❌ Нет активного чата")
-
-# ========== ЗАПУСК ==========
+# ==================== ЗАПУСК БОТА ====================
 
 def main():
-    print("🚀 Запуск бота...")
-    print(f"🔑 Токен: {BOT_TOKEN[:15]}... (скрыт)")
+    token = os.environ.get('BOT_TOKEN')
+    if not token:
+        raise ValueError("Укажите BOT_TOKEN в переменных окружения")
     
-    # Создаём приложение
-    application = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(token).build()
     
-    # Диалог с покупателем
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(select_username, pattern="^select_")],
-        states={
-            WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_price)]
-        },
-        fallbacks=[CallbackQueryHandler(back_to_list, pattern="^back_to_list$")]
-    )
+    # Команды статистики
+    app.add_handler(CommandHandler("стата", stats_day))
+    app.add_handler(CommandHandler("стата_день", stats_day))
+    app.add_handler(CommandHandler("стата_неделя", stats_week))
+    app.add_handler(CommandHandler("стата_вся", stats_all))
+    app.add_handler(CommandHandler("стата_прошлая_неделя", stats_last_week))
     
-    # Основные команды
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("list", list_usernames))
-    application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CommandHandler("endchat", end_chat))
+    # Управление никами
+    app.add_handler(CommandHandler("новый_ник", set_nick))
+    app.add_handler(CommandHandler("удали_ник", delete_nick))
     
-    # Обработчики callback-запросов
-    application.add_handler(CallbackQueryHandler(page_navigation, pattern="^(next_page|prev_page)$"))
-    application.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(accept_|reject_|chat_|waiting_list|admin_back|reply_).*"))
-    application.add_handler(CallbackQueryHandler(back_to_list, pattern="^back_to_list$"))
-    application.add_handler(CallbackQueryHandler(select_username, pattern="^select_"))
+    # Трекинг сообщений
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
     
-    # Единый обработчик для всех текстовых сообщений (должен быть последним)
-    application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Обработка кнопок
+    app.add_handler(CallbackQueryHandler(button_callback))
     
-    print("✅ Бот готов к работе!")
-    print(f"👤 Админ ID: {ADMIN_ID}")
-    print("📋 Команды: /list - для покупателей, /admin - для вас")
-    
-    # Запускаем polling
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    print("✅ Бот запущен")
+    app.run_polling()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n👋 Бот остановлен")
-    except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        print("🔄 Перезапуск через 10 секунд...")
-        time.sleep(10)
-        main()
+    main()
