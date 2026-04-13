@@ -73,8 +73,8 @@ def get_period_dates(period):
         monday = today - timedelta(days=today.weekday())
         since = datetime.combine(monday, datetime.min.time())
         until = now
-        monday_str = monday.strftime('%d.%m')
-        today_str = today.strftime('%d.%m')
+        monday_str = monday.strftime('%d.%m').replace('.', '\\.')
+        today_str = today.strftime('%d.%m').replace('.', '\\.')
         period_name = f"за текущую неделю \\({monday_str} – {today_str}\\)"
         
     elif period == 'last_week':
@@ -83,8 +83,8 @@ def get_period_dates(period):
         last_sunday = last_monday + timedelta(days=6)
         since = datetime.combine(last_monday, datetime.min.time())
         until = datetime.combine(last_sunday, datetime.max.time())
-        monday_str = last_monday.strftime('%d.%m')
-        sunday_str = last_sunday.strftime('%d.%m')
+        monday_str = last_monday.strftime('%d.%m').replace('.', '\\.')
+        sunday_str = last_sunday.strftime('%d.%m').replace('.', '\\.')
         period_name = f"за прошлую неделю \\({monday_str} – {sunday_str}\\)"
         
     elif period == 'all':
@@ -219,43 +219,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ''', (user.id, user.username, user.full_name, chat_id, timestamp))
         conn.commit()
         
-        # Обработка команд с ¡
-        if message_text.startswith('¡'):
-            parts = message_text[1:].strip().lower().split()
+        # Обработка команд с ¡ или i (если телефон заменил)
+        first_char = message_text[0]
+        if first_char in ['¡', 'i', 'I']:
+            # Убираем первый символ и разбираем
+            parts = message_text[1:].strip().split()
             if not parts:
                 return
             
-            cmd = parts[0]
+            cmd = parts[0].lower()
             
             # ¡стата ...
             if cmd in ['стата', 'статистика']:
                 if len(parts) >= 2:
-                    sub = parts[1]
-                    if sub in ['день', 'day']:
+                    sub = parts[1].lower()
+                    if sub in ['день', 'дня', 'day']:
                         await send_stats(update, context, 'day')
                     elif sub in ['неделя', 'неделю', 'week']:
                         await send_stats(update, context, 'week')
                     elif sub in ['прошлая', 'прошлую']:
                         await send_stats(update, context, 'last_week')
-                    elif sub in ['вся', 'всё', 'all']:
+                    elif sub in ['вся', 'всё', 'все', 'all']:
                         await send_stats(update, context, 'all')
                     else:
                         await send_stats(update, context, 'day')
                 else:
                     await send_stats(update, context, 'day')
             
-            # ¡новый ник ...
+            # ¡новый ник ... (сохраняем ОРИГИНАЛЬНЫЙ регистр из message_text)
             elif cmd in ['новый', 'ник']:
+                # Ищем ник в оригинальном сообщении
+                original_text = message_text[1:].strip()
                 nick = None
-                if cmd == 'новый' and len(parts) >= 3 and parts[1] == 'ник':
-                    nick = " ".join(parts[2:])
-                elif cmd == 'ник' and len(parts) >= 2:
-                    nick = " ".join(parts[1:])
-                else:
-                    nick = " ".join(parts[1:])
                 
+                if cmd == 'новый' and len(parts) >= 3 and parts[1].lower() == 'ник':
+                    # Берём всё после "новый ник"
+                    nick = " ".join(original_text.split()[2:])
+                elif cmd == 'ник' and len(parts) >= 2:
+                    # Берём всё после "ник"
+                    nick = " ".join(original_text.split()[1:])
+                else:
+                    nick = " ".join(original_text.split()[1:])
+                
+                # Убираем кавычки если есть
                 nick = nick.strip('"\'')
+                
                 if nick:
+                    # Сохраняем ОРИГИНАЛЬНЫЙ регистр!
                     cursor.execute('INSERT OR REPLACE INTO nicknames (user_id, custom_nick) VALUES (?, ?)',
                                    (user.id, nick))
                     conn.commit()
@@ -264,7 +274,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text('❌ Укажите ник: ¡новый ник "Ваше Имя"')
             
             # ¡удали ник
-            elif cmd in ['удали', 'удалить'] and len(parts) >= 2 and parts[1] == 'ник':
+            elif cmd in ['удали', 'удалить'] and len(parts) >= 2 and parts[1].lower() == 'ник':
                 cursor.execute('DELETE FROM nicknames WHERE user_id = ?', (user.id,))
                 conn.commit()
                 await update.message.reply_text("✅ Ник удалён")
@@ -278,7 +288,7 @@ async def send_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, period)
     text, page, total_pages = format_stats_page(stats, 1, 10, period_name)
     
     if total_pages == 0:
-        await update.message.reply_text(text)
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
     
     keyboard = get_keyboard(1, total_pages, period, chat_id)
