@@ -1,8 +1,15 @@
-import os
 import sqlite3
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+
+# ==================== НАСТРОЙКИ ====================
+
+BOT_TOKEN = "8755825898:AAGqUoGs8YtOY3IZ_YMYMUHWkG5gk4GYjik"
+
+ADMIN_IDS = [7034951533, 7444090752]
+
+# ===================================================
 
 # Инициализация БД
 conn = sqlite3.connect('stats.db', check_same_thread=False)
@@ -22,6 +29,10 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS nicknames
 conn.commit()
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+def is_admin(user_id):
+    """Проверка, является ли пользователь администратором"""
+    return user_id in ADMIN_IDS
 
 def get_display_name(user_id, username, display_name):
     """Получить отображаемое имя (псевдоним или реальное)"""
@@ -84,7 +95,6 @@ def get_stats_data(since, until, chat_id=None):
             'count': count
         })
     
-    # Сортировка по количеству сообщений (по убыванию)
     stats.sort(key=lambda x: x['count'], reverse=True)
     return stats
 
@@ -105,7 +115,7 @@ def format_stats_page(stats, page, per_page, period_name):
         stat = stats[i]
         lines.append(f"{i+1}. {stat['name']} — {stat['count']} сообщ.")
     
-    lines.append(f"\nСтраница {page}/{total_pages}")
+    lines.append(f"\n📄 Страница {page}/{total_pages}")
     
     return "\n".join(lines), page, total_pages
 
@@ -115,10 +125,10 @@ def get_keyboard(page, total_pages, period, chat_id):
     row = []
     
     if page > 1:
-        row.append(InlineKeyboardButton("🠐 Назад", callback_data=f"page_{period}_{page-1}_{chat_id}"))
+        row.append(InlineKeyboardButton("◀️ Назад", callback_data=f"page_{period}_{page-1}_{chat_id}"))
     
     if page < total_pages:
-        row.append(InlineKeyboardButton("Вперёд ➔", callback_data=f"page_{period}_{page+1}_{chat_id}"))
+        row.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"page_{period}_{page+1}_{chat_id}"))
     
     if row:
         keyboard.append(row)
@@ -156,7 +166,6 @@ async def send_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, period)
     
     keyboard = get_keyboard(1, total_pages, period, chat_id)
     
-    # Сохраняем данные в context для callback
     context.chat_data[f'stats_{period}'] = stats
     context.chat_data[f'period_name_{period}'] = period_name
     
@@ -195,8 +204,6 @@ async def delete_nick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
     await update.message.reply_text("✅ Ник удалён, используется реальное имя")
 
-# ==================== ОБРАБОТЧИК КНОПОК ====================
-
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка нажатий на кнопки"""
     query = update.callback_query
@@ -208,23 +215,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.delete()
         return
     
-    # Разбираем callback_data: page_week_2_123456789
     parts = data.split('_')
     if len(parts) >= 4 and parts[0] == 'page':
         period = parts[1]
         page = int(parts[2])
         original_chat_id = int(parts[3])
         
-        # Проверяем, что кнопку нажал тот же пользователь в том же чате
         if query.message.chat_id != original_chat_id:
             return
         
-        # Получаем сохранённые данные
         stats = context.chat_data.get(f'stats_{period}')
         period_name = context.chat_data.get(f'period_name_{period}', '')
         
         if not stats:
-            # Если данные потеряны, пересчитываем
             since, until, period_name = get_period_dates(period)
             stats = get_stats_data(since, until, original_chat_id)
             context.chat_data[f'stats_{period}'] = stats
@@ -238,30 +241,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================== ЗАПУСК БОТА ====================
 
 def main():
-    token = os.environ.get('BOT_TOKEN')
-    if not token:
-        raise ValueError("Укажите BOT_TOKEN в переменных окружения")
+    app = Application.builder().token(BOT_TOKEN).build()
     
-    app = Application.builder().token(token).build()
-    
-    # Команды статистики
     app.add_handler(CommandHandler("стата", stats_day))
     app.add_handler(CommandHandler("стата_день", stats_day))
     app.add_handler(CommandHandler("стата_неделя", stats_week))
     app.add_handler(CommandHandler("стата_вся", stats_all))
     app.add_handler(CommandHandler("стата_прошлая_неделя", stats_last_week))
     
-    # Управление никами
     app.add_handler(CommandHandler("новый_ник", set_nick))
     app.add_handler(CommandHandler("удали_ник", delete_nick))
     
-    # Трекинг сообщений
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
     
-    # Обработка кнопок
     app.add_handler(CallbackQueryHandler(button_callback))
     
-    print("✅ Бот запущен")
+    print("✅ Бот запущен!")
+    print(f"👑 Администраторы: {ADMIN_IDS}")
     app.run_polling()
 
 if __name__ == "__main__":
